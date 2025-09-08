@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <?!= include('Stylesheet'); ?>
+</head>
+
+<body>
+  <div id="scan-view" class="container">
+    <div class="card">
+      <h1>Scan QR for QC</h1>
+      <p>Arahkan scanner Anda ke QR Code</p>
+      <!-- <div class="qr-icon-container">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="100" height="100">
+            <path d="M3 11h8V3H3v8zm2-6h4v4H5V5zm8-2v8h8V3h-8zm6 6h-4V5h4v4zM3 21h8v-8H3v8zm2-6h4v4H5v-4zm13-2h-3v3h-2v-3h-3v-2h3v-3h2v3h3v2z"/>
+          </svg>
+      </div> -->
+      <div class="qr-icon-container">
+        <img
+          src="https://quickchart.io/qr?text=ProductionScanner&size=150&light=1e1e1e&dark=e0e0e0&ecLevel=H"
+          alt="QR Code Icon"
+          width="120"
+          height="120"
+        >
+      </div>
+      <div class="loader" id="loader"></div>
+      <p class="status-text">Menunggu hasil scan...</p>
+    </div>
+  </div>
+
+  <div id="input-view" class="container" style="display:none;">
+    <div class="card">
+      <h1>QC Check</h1>
+      <p>Pilih status untuk QR Code:</p>
+      <h2 id="qr-result"></h2>
+      <div class="button-group">
+        <button id="ok-btn" class="qc-btn ok">OK</button>
+        <button id="ng-btn" class="qc-btn ng">NG</button>
+      </div>
+      <p id="feedback-message" class="status-text"></p>
+    </div>
+  </div>
+
+  <?!= include('JavaScript_QC'); ?>
+</body>
+
+</html>

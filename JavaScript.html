@@ -1,0 +1,100 @@
+<script>
+  // Variabel global
+  let lastKnownRowCount = 0;
+  let pollingInterval;
+
+  // Elemen UI
+  const scanView = document.getElementById('scan-view');
+  const successView = document.getElementById('success-view');
+  const qrResultEl = document.getElementById('qr-result');
+  const scanAgainBtn = document.getElementById('scan-again-btn');
+  const loader = document.getElementById('loader');
+
+  // Fungsi yang dijalankan saat halaman selesai dimuat
+  window.addEventListener('load', initialize);
+
+  // Event listener untuk tombol "Scan Lagi"
+  scanAgainBtn.addEventListener('click', resetUI);
+
+  /**
+   * Menginisialisasi aplikasi dengan mengambil data awal dari server.
+   */
+  function initialize() {
+    loader.style.display = 'block'; // Tampilkan loader saat inisialisasi
+    google.script.run
+      .withSuccessHandler(onInitialDataSuccess)
+      .withFailureHandler(onFailure)
+      .getInitialData();
+  }
+
+  /**
+   * Callback jika berhasil mendapatkan data awal.
+   * Memulai proses polling untuk mengecek scan baru.
+   */
+  function onInitialDataSuccess(data) {
+    if (data.error) {
+      alert("Error initializing: " + data.error);
+      return;
+    }
+    lastKnownRowCount = data.lastRow;
+    console.log("Initial row count:", lastKnownRowCount);
+    
+    // Mulai polling setiap 2 detik (2000 ms)
+    pollingInterval = setInterval(checkForNewScan, 2000);
+  }
+
+  /**
+   * Memanggil fungsi di server untuk mengecek baris baru.
+   */
+  function checkForNewScan() {
+    google.script.run
+      .withSuccessHandler(handleScanResult)
+      .withFailureHandler(onFailure)
+      .getLatestProductionScan(lastKnownRowCount);
+  }
+
+  /**
+   * Memproses hasil dari polling.
+   * Jika ada scan baru, perbarui UI.
+   */
+  function handleScanResult(result) {
+    if (result.newScan) {
+      console.log("New scan detected!", result.qr);
+      
+      // Hentikan polling
+      clearInterval(pollingInterval);
+
+      // Perbarui UI
+      qrResultEl.textContent = result.qr;
+      scanView.style.display = 'none';
+      successView.style.display = 'flex';
+      
+      // Update jumlah baris terakhir yang diketahui
+      lastKnownRowCount = result.newRowCount;
+
+    } else {
+      // Tidak ada yang baru, update jumlah baris jika ada perubahan (misal, penghapusan)
+      lastKnownRowCount = result.newRowCount;
+      console.log("No new scan. Current row count:", lastKnownRowCount);
+    }
+  }
+  
+  /**
+   * Mengatur ulang UI ke tampilan awal untuk scan berikutnya.
+   */
+  function resetUI() {
+    successView.style.display = 'none';
+    scanView.style.display = 'flex';
+    // Mulai lagi proses inisialisasi untuk mendapatkan row count terbaru
+    initialize();
+  }
+  
+  /**
+   * Menangani jika terjadi error saat komunikasi dengan server.
+   */
+  function onFailure(error) {
+    console.error('GAS Error:', error.message);
+    alert('Terjadi kesalahan: ' + error.message);
+    clearInterval(pollingInterval); // Hentikan polling jika error
+  }
+</script>

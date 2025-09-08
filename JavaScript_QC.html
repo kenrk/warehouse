@@ -1,0 +1,95 @@
+<script>
+  // Variabel global untuk QC
+  let lastKnownRowCount = 0;
+  let currentRowToUpdate = 0;
+  let pollingInterval;
+
+  // Elemen UI
+  const scanView = document.getElementById('scan-view');
+  const inputView = document.getElementById('input-view');
+  const qrResultEl = document.getElementById('qr-result');
+  const okBtn = document.getElementById('ok-btn');
+  const ngBtn = document.getElementById('ng-btn');
+  const loader = document.getElementById('loader');
+  const feedbackMsg = document.getElementById('feedback-message');
+
+  // Event listeners
+  window.addEventListener('load', initialize);
+  okBtn.addEventListener('click', () => updateStatus('OK'));
+  ngBtn.addEventListener('click', () => updateStatus('NG'));
+
+  function initialize() {
+    loader.style.display = 'block';
+    google.script.run
+      .withSuccessHandler(onInitialDataSuccess)
+      .withFailureHandler(onFailure)
+      .getLatestQCScan(0); // Dibuat 0 agar selalu dapat data awal
+  }
+
+  function onInitialDataSuccess(data) {
+    lastKnownRowCount = data.newRowCount;
+    console.log("Initial QC row count:", lastKnownRowCount);
+    pollingInterval = setInterval(checkForNewScan, 2000);
+  }
+
+  function checkForNewScan() {
+    google.script.run
+      .withSuccessHandler(handleScanResult)
+      .withFailureHandler(onFailure)
+      .getLatestQCScan(lastKnownRowCount);
+  }
+
+  function handleScanResult(result) {
+    if (result.newScan) {
+      console.log("New QC scan detected!", result.qr);
+      clearInterval(pollingInterval);
+      
+      qrResultEl.textContent = result.qr;
+      currentRowToUpdate = result.row;
+      
+      scanView.style.display = 'none';
+      inputView.style.display = 'flex';
+      lastKnownRowCount = result.newRowCount;
+    } else {
+      lastKnownRowCount = result.newRowCount;
+    }
+  }
+
+  function updateStatus(status) {
+    feedbackMsg.textContent = 'Menyimpan status...';
+    okBtn.disabled = true;
+    ngBtn.disabled = true;
+
+    google.script.run
+      .withSuccessHandler(onUpdateSuccess)
+      .withFailureHandler(onFailure)
+      .setQCStatus(currentRowToUpdate, status);
+  }
+
+  function onUpdateSuccess(response) {
+    if (response.success) {
+      feedbackMsg.textContent = `Status ${qrResultEl.textContent} berhasil disimpan!`;
+      // Tunggu 2 detik lalu reset UI untuk scan berikutnya
+      setTimeout(resetUI, 2000);
+    } else {
+      onFailure({ message: response.message });
+    }
+  }
+
+  function resetUI() {
+    inputView.style.display = 'none';
+    scanView.style.display = 'flex';
+    feedbackMsg.textContent = '';
+    okBtn.disabled = false;
+    ngBtn.disabled = false;
+    initialize();
+  }
+
+  function onFailure(error) {
+    console.error('GAS Error:', error.message);
+    feedbackMsg.textContent = 'Error: ' + error.message;
+    alert('Terjadi kesalahan: ' + error.message);
+    okBtn.disabled = false;
+    ngBtn.disabled = false;
+  }
+</script>
