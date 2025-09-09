@@ -4,82 +4,173 @@
     --card-color: #1e1e1e;
     --primary-text: #e0e0e0;
     --secondary-text: #b0b0b0;
-    --success-color: #4CAF50;
+    --accent-color: #3498db;
+    --success-color: #2ecc71;
+    --error-color: #e74c3c;
     --button-bg: #333;
     --button-hover: #444;
   }
-  
-  html, body {
+
+  html,
+  body {
     margin: 0;
     padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: var(--bg-color);
     color: var(--primary-text);
-    height: 100%;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
     text-align: center;
   }
 
   .container {
     width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
+    max-width: 500px;
+    padding: 1rem;
+    box-sizing: border-box;
+    display: none;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
+    flex-grow: 1;
   }
-  
+
+  .container.active {
+    display: flex;
+  }
+
   .card {
     background-color: var(--card-color);
-    padding: 2rem 1.5rem;
+    padding: 2rem;
     border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    width: 90%;
-    max-width: 400px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    width: 100%;
+  }
+
+  h1,
+  h2 {
+    margin-top: 0;
   }
 
   h1 {
-    margin-top: 0;
-    font-size: 1.5rem;
+    font-size: 1.8rem;
   }
 
   p {
     color: var(--secondary-text);
-    font-size: 1rem;
     line-height: 1.5;
   }
 
-  .qr-icon-container {
-    margin: 1.5rem 0;
-    color: var(--primary-text);
+  button {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 1rem 1.5rem;
+    font-size: 1.1rem;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    margin-top: 1rem;
   }
 
-  .status-text {
-    font-style: italic;
-  }
-  
-  .loader {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 2s linear infinite;
-    margin: 1rem auto;
+  button:hover {
+    opacity: 0.9;
   }
 
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+  button:active {
+    transform: scale(0.98);
   }
 
-  /* Success View */
-  .card.success h1 {
+  /* --- PERBAIKAN: Style untuk tombol yang dinonaktifkan --- */
+  button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  .qc-btn-group {
+    display: flex;
+    gap: 1rem;
+    width: 100%;
+  }
+
+  .qc-btn.ok {
+    background-color: var(--success-color);
+  }
+
+  .qc-btn.ng {
+    background-color: var(--error-color);
+  }
+
+  #qr-reader {
+    width: 100%;
+    border: 2px solid var(--button-bg);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+  }
+
+  #desktop-scanner-input {
+    position: absolute;
+    left: -9999px;
+    opacity: 0;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    transition: bottom 0.5s ease-in-out;
+    z-index: 1000;
+  }
+
+  .toast.show {
+    bottom: 20px;
+  }
+
+  .toast.success {
+    background-color: var(--success-color);
+  }
+
+  .toast.error {
+    background-color: var(--error-color);
+  }
+
+  /* --- PERBAIKAN: Aturan untuk Mobile (Responsive Design) --- */
+  @media (max-width: 600px) {
+    .card {
+      padding: 1.5rem 1rem;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    button {
+      padding: 0.9rem 1.2rem;
+      font-size: 1rem;
+    }
+  }
+
+  /* Style untuk judul sukses */
+  .success-title {
     color: var(--success-color);
+    font-size: 1.6rem;
   }
 
-  #qr-result {
+  /* Style untuk menampilkan QR yang di-scan */
+  .scanned-qr-display {
     background-color: #2a2a2a;
     padding: 0.8rem;
     border-radius: 8px;
@@ -87,55 +178,18 @@
     font-family: 'Courier New', Courier, monospace;
     font-size: 1.1rem;
     margin: 1rem 0 1.5rem 0;
-  }
-
-  button {
-    background-color: var(--button-bg);
     color: var(--primary-text);
-    border: 1px solid #555;
-    padding: 0.8rem 1.5rem;
-    font-size: 1rem;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-    width: 100%;
   }
 
-  button:hover {
-    background-color: var(--button-hover);
+  /* Penyesuaian untuk tombol pada layar mobile */
+  @media (max-width: 600px) {
+    .success-title {
+      font-size: 1.4rem;
+    }
+
+    .scanned-qr-display {
+      font-size: 1rem;
+      padding: 0.7rem;
+    }
   }
-
-  /* Style tambahan untuk Tombol QC */
-.button-group {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  margin: 1.5rem 0;
-}
-
-.qc-btn {
-  flex: 1;
-  padding: 1rem;
-  font-size: 1.2rem;
-  font-weight: bold;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.qc-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.qc-btn.ok {
-  background-color: #4CAF50; /* Hijau */
-  color: white;
-}
-
-.qc-btn.ng {
-  background-color: #f44336; /* Merah */
-  color: white;
-}
 </style>

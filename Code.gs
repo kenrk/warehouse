@@ -235,28 +235,25 @@ function dedupeSheetByQR_(sheet, qrColumn) {
 // =========================================================================
 
 /** Handler untuk sheet Supplies */
-/** Handler untuk sheet Supplies */
 function handleSuppliesEdit_(e, sh) {
-  Utilities.sleep(500); // Jeda tetap penting untuk stabilitas
-
   try {
+    // --- PERBAIKAN UTAMA DI SINI ---
+    // Perintah ini memaksa Google untuk menyelesaikan semua operasi tulis
+    // sebelum script melanjutkan. Ini menyelesaikan masalah waktu (timing issue).
+    SpreadsheetApp.flush(); 
+    
     const row = e.range.getRow();
     const col = e.range.getColumn();
     if (row < START_ROW || col !== COL_SUP.QR) return false;
 
-    // --- PERUBAHAN DI SINI ---
-    // Mengambil nilai langsung dari event 'e.value', bukan dari 'e.range.getValue()'
-    // Ini jauh lebih andal untuk trigger onEdit.
-    const qr = String(e.value || '').trim();
+    // Sekarang aman untuk membaca nilai langsung dari sel karena sudah di-flush
+    const qr = String(e.range.getValue() || '').trim();
     
     console.log(`(1) Memproses edit di baris ${row} untuk QR: "${qr}"`);
 
     if (!qr) {
       console.log("(2) QR kosong, membersihkan baris.");
-      // Jika baris ini dijalankan karena sel memang dikosongkan, clear content
-      if (e.oldValue) { // Hanya clear jika sebelumnya ada isinya
-         clearRowContent_(sh, row, sh.getLastColumn());
-      }
+      clearRowContent_(sh, row, sh.getLastColumn());
       return false;
     }
 
@@ -630,27 +627,30 @@ function setupTriggersOnce() {
 }
 
 // =========================================================================
-//                  ⭐ FUNGSI UNTUK WEB APP INTERFACE ⭐
+//                  ⭐ FUNGSI UTAMA WEB APP (Versi 2.1 - Clean) ⭐
 // =========================================================================
 
 /**
  * Fungsi utama untuk menjalankan Web App.
- * Ini akan menampilkan file Index.html.
- * @param {Object} e - Parameter event dari request GET.
- * @returns {HtmlOutput} - Output HTML untuk ditampilkan di browser.
+ * Ini adalah SATU-SATUNYA doGet yang harus ada di proyek Anda.
  */
 function doGet(e) {
-  // .evaluate() akan memproses template dan menjalankan kode <?!= ... ?>
-  return HtmlService.createTemplateFromFile('Index') 
-      .evaluate() // TAMBAHKAN .evaluate() DI SINI
-      .setTitle('Production Scanner Interface')
-      .addMetaTag('viewport', 'width-device-width, initial-scale=1.0');
+  // Fungsi ini memanggil file WebApp.html sebagai template
+  return HtmlService.createTemplateFromFile('WebApp')
+      .evaluate()
+      .setTitle('Warehouse Scanner')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, user-scalable=no');
 }
 
 /**
- * Helper untuk menyisipkan konten file lain (CSS, JS) ke dalam HTML utama.
- * @param {string} filename - Nama file yang akan disisipkan.
- * @returns {string} - Konten dari file tersebut.
+ * Helper untuk menyisipkan konten file CSS/JS ke dalam HTML utama.
+ */
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+/**
+ * Helper untuk menyisipkan konten CSS/JS (jika kita memisahkannya nanti).
  */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
@@ -720,19 +720,19 @@ function getLatestProductionScan(lastKnownRowCount) {
  * Fungsi untuk menampilkan halaman khusus QC.
  * Kita akan memanggilnya dengan parameter URL, contoh: .../exec?page=qc
  */
-function doGet(e) {
-  if (e.parameter.page == 'qc') {
-    return HtmlService.createTemplateFromFile('Index_QC')
-      .evaluate()
-      .setTitle('QC Scanner Interface')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
-  }
-  // Jika tidak ada parameter 'page', tampilkan halaman Produksi default
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle('Production Scanner Interface')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
-}
+// function doGet(e) {
+//   if (e.parameter.page == 'qc') {
+//     return HtmlService.createTemplateFromFile('Index_QC')
+//       .evaluate()
+//       .setTitle('QC Scanner Interface')
+//       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+//   }
+//   // Jika tidak ada parameter 'page', tampilkan halaman Produksi default
+//   return HtmlService.createTemplateFromFile('Index')
+//     .evaluate()
+//     .setTitle('Production Scanner Interface')
+//     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+// }
 
 /**
  * Mengecek apakah ada baris baru di sheet QC.
@@ -784,5 +784,93 @@ function setQCStatus(row, status) {
   } catch (e) {
     console.error(`Error in setQCStatus: ${e.message}`);
     return { success: false, message: e.message };
+  }
+}
+
+// =========================================================================
+//         ⭐ FUNGSI UNTUK MENERIMA DATA DARI WEB APP (Versi 2.0) ⭐
+// =========================================================================
+
+/**
+ * Memproses scan untuk ditambahkan ke sheet Production.
+ * @param {string} qrCode - QR Code yang di-scan.
+ * @returns {Object} - Objek berisi status keberhasilan dan pesan.
+ */
+function addProductionRecord(qrCode) {
+  try {
+    if (!qrCode) throw new Error("QR Code tidak boleh kosong.");
+
+    // Validasi 1: QR harus terdaftar di Supplies
+    if (!isQRExistsInSupplies_(qrCode)) {
+      throw new Error(`QR "${qrCode}" tidak terdaftar di Supplies.`);
+    }
+
+    const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_PRODUCTION);
+    const { date, time } = now_();
+    const email = getEmail_();
+
+    // --- PERBAIKAN: Logika untuk First_Seen dan Scan_Count ---
+    const dataRange = sheet.getRange(START_ROW, COL_PROD.QR, sheet.getLastRow() - START_ROW + 1, sheet.getLastColumn());
+    const values = dataRange.getValues();
+    let existingRowIndex = -1;
+
+    for (let i = 0; i < values.length; i++) {
+      if (values[i][COL_PROD.QR - 1] === qrCode) {
+        existingRowIndex = i;
+        break;
+      }
+    }
+
+    if (existingRowIndex !== -1) {
+      // Jika QR sudah ada, update Scan_Count
+      const currentCount = values[existingRowIndex][COL_PROD.SCAN_COUNT - 1] || 0;
+      sheet.getRange(START_ROW + existingRowIndex, COL_PROD.SCAN_COUNT).setValue(currentCount + 1);
+       return { success: true, message: `✅ Scan count untuk ${qrCode} diupdate!` };
+    } else {
+      // Jika QR baru, tambahkan baris baru dengan First_Seen dan Scan_Count = 1
+      sheet.appendRow([qrCode, date, time, email, '', date, 1]); // LINE (kolom 5) kosong, First_Seen (6), Scan_Count (7)
+      return { success: true, message: `✅ Berhasil ditambahkan ke Production!` };
+    }
+
+  } catch (e) {
+    console.error(`Error in addProductionRecord: ${e.message}`);
+    return { success: false, message: `❌ Gagal: ${e.message}` };
+  }
+}
+
+/**
+ * Memproses scan untuk ditambahkan ke sheet QC.
+ * @param {string} qrCode - QR Code yang di-scan.
+ * @param {string} status - Status yang dipilih ('OK' atau 'NG').
+ * @returns {Object} - Objek berisi status keberhasilan dan pesan.
+ */
+function addQCRecord(qrCode, status) {
+   try {
+    if (!qrCode) throw new Error("QR Code tidak boleh kosong.");
+    if (status !== 'OK' && status !== 'NG') throw new Error("Status tidak valid.");
+
+    // Validasi 1: QR harus ada di Production
+    if (!isQRExistsInProduction_(qrCode)) {
+      throw new Error(`QR "${qrCode}" tidak ditemukan di Production.`);
+    }
+
+    // Validasi 2: QR tidak boleh duplikat di QC
+    const qcSheet = SpreadsheetApp.getActive().getSheetByName(SHEET_QC);
+    const qcQRs = getValidQRsFromSheet_(qcSheet, COL_QC.QR);
+    if (qcQRs.has(qrCode)) {
+      throw new Error(`QR "${qrCode}" sudah pernah di-scan di QC.`);
+    }
+
+    const { date, time } = now_();
+    const email = getEmail_();
+
+    // Menambahkan baris baru
+    qcSheet.appendRow([qrCode, date, time, email, status, '', '']); // Kolom NG dikosongkan
+
+    return { success: true, message: `✅ Status "${status}" berhasil disimpan!` };
+
+  } catch (e) {
+    console.error(`Error in addQCRecord: ${e.message}`);
+    return { success: false, message: `❌ Gagal: ${e.message}` };
   }
 }
