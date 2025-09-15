@@ -1,67 +1,77 @@
 <!DOCTYPE html>
-<html lang="id">
-
+<html>
 <head>
-  <base target="_top">
-  <?!= include('Stylesheet'); ?>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Warehouse Scanner</title>
-
-  <!-- Memuat library untuk scan QR dari kamera -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" type="text/javascript"></script>
-
+    <base target-top>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <?!= include('Stylesheet'); ?>
 </head>
-
 <body>
-
-  <!-- Layar Pemilihan Mode (Production/QC) -->
-  <div id="mode-selection-view" class="container active">
-    <div class="card">
-      <h1>Pilih Mode</h1>
-      <p>Pilih tugas yang akan Anda lakukan.</p>
-      <button id="select-production-btn">Scan Produksi</button>
-      <button id="select-qc-btn">Scan QC</button>
-    </div>
-  </div>
-
-  <!-- Layar Scan Utama -->
-  <div id="scan-view" class="container">
-    <h1 id="scan-title">Scan QR</h1>
-    <div id="qr-reader"></div>
-    <!-- <p>Arahkan kamera ke QR Code atau gunakan scanner eksternal.</p> -->
-    <button id="back-to-mode-btn">Kembali</button>
     <!-- Input tersembunyi untuk scanner desktop -->
-    <input type="text" id="desktop-scanner-input" autofocus>
-  </div>
+    <input type="text" id="desktop-scanner-input" autocomplete="off">
 
-  <!-- Layar Input Status QC -->
-  <div id="qc-status-view" class="container">
-    <div class="card">
-      <h1>Pilih Status QC</h1>
-      <p>Pilih status untuk QR Code:</p>
-      <h2 id="scanned-qr-code" style="word-wrap: break-word;"></h2>
-      <div class="qc-btn-group">
-        <button id="ok-btn" class="qc-btn ok">OK</button>
-        <button id="ng-btn" class="qc-btn ng">NG</button>
-      </div>
-      <button id="cancel-qc-btn">Batal</button>
+    <!-- === HALAMAN 1: Pilihan Mode === -->
+    <div id="mode-selection-view" class="container active">
+        <div class="card">
+            <h1>Warehouse Scanner</h1>
+            <p>Pilih proses yang akan dilakukan:</p>
+            <div class="button-group">
+                <button id="select-production-btn">Scan Produksi</button>
+                <button id="select-qc-btn">Scan QC</button>
+                <button id="select-repair-btn">Scan Repair</button>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <div id="production-done-view" class="container">
-    <div class="card">
-      <h1 class="success-title">Produksi Selesai ✅</h1>
-      <p>QR Code berikut berhasil diproses:</p>
-      <h2 id="production-done-qr" class="scanned-qr-display"></h2>
-      <button id="scan-again-btn">Scan Lagi</button>
+    <!-- === HALAMAN 2: Scan Kamera === -->
+    <div id="scan-view" class="container">
+        <div class="card">
+            <h1 id="scan-title">Scan QR</h1>
+            <div id="qr-reader"></div>
+            <!-- <p>Arahkan kamera ke QR Code atau gunakan scanner eksternal.</p> -->
+            <div class="button-group">
+                <button id="back-to-mode-btn">Kembali</button>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <!-- Elemen untuk notifikasi toast -->
-  <div id="feedback-toast" class="toast"></div>
+    <!-- === HALAMAN 3: Status QC === -->
+    <div id="qc-status-view" class="container">
+        <div class="card">
+            <h1>Pilih Status QC</h1>
+            <p>Untuk QR Code:</p>
+            <div id="scanned-qr-code" class="scanned-qr-display"></div>
+            <div class="qc-btn-group">
+                <button id="ok-btn" class="qc-btn ok">OK</button>
+                <button id="ng-btn" class="qc-btn ng">NG</button>
+            </div>
+            <button id="cancel-qc-btn">Batal</button>
+        </div>
+    </div>
 
-  <?!= include('JavaScript'); ?>
+    <!-- === HALAMAN 4: Produksi Selesai === -->
+    <div id="production-done-view" class="container">
+        <div class="card">
+            <h1 class="success-title">Produksi Selesai ✅</h1>
+            <p>QR Code berikut berhasil diproses:</p>
+            <div id="production-done-qr" class="scanned-qr-display"></div>
+            <button id="scan-again-btn">Scan Lagi</button>
+        </div>
+    </div>
+
+    <!-- === HALAMAN 5: Repair Selesai === -->
+    <div id="repair-done-view" class="container">
+        <div class="card">
+            <h1 id="repair-done-title" class="success-title"></h1> 
+            <p>QR Code berikut berhasil diproses:</p>
+            <div id="repair-done-qr" class="scanned-qr-display"></div>
+            <button id="scan-again-repair-btn">Scan Lagi</button>
+        </div>
+    </div>
+
+    <!-- Toast Notifikasi -->
+    <div id="feedback-toast" class="toast"></div>
+
+    <?!= include('JavaScript'); ?>
 </body>
-
 </html>
+

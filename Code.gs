@@ -12,17 +12,19 @@ const TZ = 'Asia/Jakarta';
 const START_ROW = 2;
 
 // Nama Sheet
-const SHEET_SUPPLIES   = 'Supplies';
-const SHEET_PN         = 'PN';
+const SHEET_SUPPLIES = 'Supplies';
+const SHEET_PN = 'PN';
 const SHEET_PRODUCTION = 'Production';
-const SHEET_QC         = 'QC';        // UBAH ke 'NG' bila tab kamu bernama NG
-const SHEET_NG_PARAM   = 'NG_Param';
-const SHEET_DASHBOARD  = 'Dashboard';
+const SHEET_QC = 'QC';
+const SHEET_REPAIR = 'Repair';
+const SHEET_NG_PARAM = 'NG_Param';
+const SHEET_DASHBOARD = 'Dashboard';
 
 // Definisi Kolom (1-based)
-const COL_SUP  = { QR: 1, PARTNO: 2, PARTNAME: 3, BATCH: 4, DATE: 5, TIME: 6, OP: 7, QR_CODE: 8 };
+const COL_SUP = { QR: 1, PARTNO: 2, PARTNAME: 3, BATCH: 4, DATE: 5, TIME: 6, OP: 7, QR_CODE: 8 };
 const COL_PROD = { QR: 1, DATE: 2, TIME: 3, OP: 4, LINE: 5, FIRST_SEEN: 6, SCAN_COUNT: 7 };
-const COL_QC   = { QR: 1, DATE: 2, TIME: 3, OP: 4, STATUS: 5, JENIS_NG: 6, DETAIL_NG: 7 };
+const COL_QC = { QR: 1, DATE: 2, TIME: 3, OP: 4, STATUS: 5, JENIS_NG: 6, DETAIL_NG: 7 };
+const COL_REPAIR = { QR: 1, DATE_1: 2, TIME_1: 3, OP: 4, DATE_2: 5, TIME_2: 6 };
 
 // =========================================================================
 //                        ⭐ FUNGSI PEMICU (INSTALLABLE TRIGGERS) ⭐
@@ -108,9 +110,9 @@ function onOpen() {
 function syncAllSheets() {
   try {
     const ss = SpreadsheetApp.getActive();
-    const suppliesSheet   = ss.getSheetByName(SHEET_SUPPLIES);
+    const suppliesSheet = ss.getSheetByName(SHEET_SUPPLIES);
     const productionSheet = ss.getSheetByName(SHEET_PRODUCTION);
-    const qcSheet         = ss.getSheetByName(SHEET_QC);
+    const qcSheet = ss.getSheetByName(SHEET_QC);
 
     if (!suppliesSheet || !productionSheet || !qcSheet) {
       console.warn('syncAllSheets: Pastikan Supplies/Production/QC ada semua.');
@@ -143,7 +145,7 @@ function syncAllSheets() {
 function syncProductionWithSupplies() {
   try {
     const ss = SpreadsheetApp.getActive();
-    const suppliesSheet   = ss.getSheetByName(SHEET_SUPPLIES);
+    const suppliesSheet = ss.getSheetByName(SHEET_SUPPLIES);
     const productionSheet = ss.getSheetByName(SHEET_PRODUCTION);
     if (!suppliesSheet || !productionSheet) return 0;
 
@@ -152,7 +154,7 @@ function syncProductionWithSupplies() {
     if (productionRemoved > 0) console.log(`✅ ${productionRemoved} data Production disinkronkan`);
     return productionRemoved;
   } catch (e) {
-    console.error(`Error sync Production: ${e.message}`); 
+    console.error(`Error sync Production: ${e.message}`);
     return 0;
   }
 }
@@ -162,7 +164,7 @@ function syncQCWithProduction() {
   try {
     const ss = SpreadsheetApp.getActive();
     const productionSheet = ss.getSheetByName(SHEET_PRODUCTION);
-    const qcSheet         = ss.getSheetByName(SHEET_QC);
+    const qcSheet = ss.getSheetByName(SHEET_QC);
     if (!productionSheet || !qcSheet) return 0;
 
     const productionQRs = getValidQRsFromSheet_(productionSheet, COL_PROD.QR);
@@ -170,7 +172,7 @@ function syncQCWithProduction() {
     if (qcRemoved > 0) console.log(`✅ ${qcRemoved} data QC disinkronkan`);
     return qcRemoved;
   } catch (e) {
-    console.error(`Error sync QC: ${e.message}`); 
+    console.error(`Error sync QC: ${e.message}`);
     return 0;
   }
 }
@@ -181,10 +183,10 @@ function getValidQRsFromSheet_(sheet, qrColumn) {
   if (lastRow < START_ROW) return new Set();
   return new Set(
     sheet.getRange(START_ROW, qrColumn, lastRow - START_ROW + 1, 1)
-         .getValues()
-         .flat()
-         .map(qr => String(qr).trim())
-         .filter(Boolean)
+      .getValues()
+      .flat()
+      .map(qr => String(qr).trim())
+      .filter(Boolean)
   );
 }
 
@@ -225,7 +227,7 @@ function dedupeSheetByQR_(sheet, qrColumn) {
   });
 
   if (toDelete.length) {
-    toDelete.sort((a,b)=>b-a).forEach(r => sheet.deleteRow(r));
+    toDelete.sort((a, b) => b - a).forEach(r => sheet.deleteRow(r));
   }
   return toDelete.length;
 }
@@ -240,15 +242,15 @@ function handleSuppliesEdit_(e, sh) {
     // --- PERBAIKAN UTAMA DI SINI ---
     // Perintah ini memaksa Google untuk menyelesaikan semua operasi tulis
     // sebelum script melanjutkan. Ini menyelesaikan masalah waktu (timing issue).
-    SpreadsheetApp.flush(); 
-    
+    SpreadsheetApp.flush();
+
     const row = e.range.getRow();
     const col = e.range.getColumn();
     if (row < START_ROW || col !== COL_SUP.QR) return false;
 
     // Sekarang aman untuk membaca nilai langsung dari sel karena sudah di-flush
     const qr = String(e.range.getValue() || '').trim();
-    
+
     console.log(`(1) Memproses edit di baris ${row} untuk QR: "${qr}"`);
 
     if (!qr) {
@@ -359,7 +361,7 @@ function handleQCEdit_(e, sh) {
 
   if (col === COL_QC.STATUS) {
     const status = String(e.range.getValue() || '').trim().toUpperCase();
-    const jenisNgCell  = sh.getRange(row, COL_QC.JENIS_NG);
+    const jenisNgCell = sh.getRange(row, COL_QC.JENIS_NG);
     const detailNgCell = sh.getRange(row, COL_QC.DETAIL_NG);
 
     if (status === 'NG') {
@@ -402,7 +404,7 @@ function isDuplicateQR_(sheet, currentRow, qr, qrColumn) {
     }
   });
 
-  if (dupRows.length) dupRows.sort((a,b)=>b-a).forEach(r => sheet.deleteRow(r));
+  if (dupRows.length) dupRows.sort((a, b) => b - a).forEach(r => sheet.deleteRow(r));
   return firstRow !== null && currentRow !== firstRow;
 }
 
@@ -418,6 +420,13 @@ function isQRExistsInProduction_(qr) {
   if (!sheet || sheet.getLastRow() < START_ROW) return false;
   const qrValues = sheet.getRange(START_ROW, COL_PROD.QR, sheet.getLastRow() - START_ROW + 1, 1).getValues();
   return qrValues.some(row => String(row[0]).trim() === qr);
+}
+
+function isQRExistsInQC_(qr) {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_QC);
+  if (!sheet || sheet.getLastRow() < START_ROW) return false;
+  const qrValues = sheet.getRange(START_ROW, COL_QC.QR, sheet.getLastRow() - START_ROW + 1, 1).getValues();
+  return qrValues.flat().includes(qr);
 }
 
 /** Parse QR: 4 char SN + 4 char PartNo + 2 char Batch (+ optional suffix) */
@@ -437,9 +446,9 @@ function lookupPN_(sn) {
   for (const row of data) {
     if (String(row[0]).toUpperCase().trim() === target) {
       return {
-        partNo:  String(row[1] || ''),
-        partName:String(row[2] || ''),
-        batch:   String(row[3] || '')
+        partNo: String(row[1] || ''),
+        partName: String(row[2] || ''),
+        batch: String(row[3] || '')
       };
     }
   }
@@ -448,7 +457,7 @@ function lookupPN_(sn) {
 
 function writeSuppliesRow_(sheet, row, pnData, parsedQR) {
   const { date, time } = now_();
-  const values = [ parsedQR.partNo, pnData.partName, parsedQR.batch, date, time, getEmail_() ];
+  const values = [parsedQR.partNo, pnData.partName, parsedQR.batch, date, time, getEmail_()];
   sheet.getRange(row, COL_SUP.PARTNO, 1, 6).setValues([values]);
   generateQRCodeForRow_(sheet, row);
 }
@@ -540,7 +549,7 @@ function generateDashboard() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const dashboardSheet = ss.getSheetByName(SHEET_DASHBOARD);
-    const suppliesSheet  = ss.getSheetByName(SHEET_SUPPLIES);
+    const suppliesSheet = ss.getSheetByName(SHEET_SUPPLIES);
     if (!dashboardSheet || !suppliesSheet) return;
 
     dashboardSheet.clear();
@@ -564,10 +573,10 @@ function generateDashboard() {
       if (dateCell instanceof Date) date = Utilities.formatDate(dateCell, TZ, 'M/d/yyyy');
       else date = String(dateCell);
 
-      const suppliesCount   = 1;
+      const suppliesCount = 1;
       const productionCount = countInSheet(SHEET_PRODUCTION, qr, 0);
-      const qcOKCount       = countInSheet(SHEET_QC, qr, 4, 'OK');
-      const qcNGCount       = countInSheet(SHEET_QC, qr, 4, 'NG');
+      const qcOKCount = countInSheet(SHEET_QC, qr, 4, 'OK');
+      const qcNGCount = countInSheet(SHEET_QC, qr, 4, 'NG');
 
       resultArray.push([date, partName, suppliesCount, productionCount, qcOKCount, qcNGCount]);
     }
@@ -637,9 +646,9 @@ function setupTriggersOnce() {
 function doGet(e) {
   // Fungsi ini memanggil file WebApp.html sebagai template
   return HtmlService.createTemplateFromFile('WebApp')
-      .evaluate()
-      .setTitle('Warehouse Scanner')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, user-scalable=no');
+    .evaluate()
+    .setTitle('Warehouse Scanner')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, user-scalable=no');
 }
 
 /**
@@ -747,7 +756,7 @@ function getLatestQCScan(lastKnownRowCount) {
     const newQrValue = sheet.getRange(currentLastRow, COL_QC.QR).getValue();
     // Validasi: pastikan QR ada di Production sebelum ditampilkan di UI QC
     if (newQrValue && isQRExistsInProduction_(newQrValue)) {
-       return {
+      return {
         newScan: true,
         qr: newQrValue,
         row: currentLastRow, // Kirim nomor baris untuk diupdate nanti
@@ -775,7 +784,7 @@ function setQCStatus(row, status) {
       throw new Error("Invalid status value.");
     }
     sheet.getRange(row, COL_QC.STATUS).setValue(status);
-    
+
     // Kita juga perlu mengisi tanggal, waktu, dan operator seperti di handleQCEdit_
     const { date, time } = now_();
     sheet.getRange(row, COL_QC.DATE, 1, 3).setValues([[date, time, getEmail_()]]);
@@ -825,7 +834,7 @@ function addProductionRecord(qrCode) {
       // Jika QR sudah ada, update Scan_Count
       const currentCount = values[existingRowIndex][COL_PROD.SCAN_COUNT - 1] || 0;
       sheet.getRange(START_ROW + existingRowIndex, COL_PROD.SCAN_COUNT).setValue(currentCount + 1);
-       return { success: true, message: `✅ Scan count untuk ${qrCode} diupdate!` };
+      return { success: true, message: `✅ Scan count untuk ${qrCode} diupdate!` };
     } else {
       // Jika QR baru, tambahkan baris baru dengan First_Seen dan Scan_Count = 1
       sheet.appendRow([qrCode, date, time, email, '', date, 1]); // LINE (kolom 5) kosong, First_Seen (6), Scan_Count (7)
@@ -845,7 +854,7 @@ function addProductionRecord(qrCode) {
  * @returns {Object} - Objek berisi status keberhasilan dan pesan.
  */
 function addQCRecord(qrCode, status) {
-   try {
+  try {
     if (!qrCode) throw new Error("QR Code tidak boleh kosong.");
     if (status !== 'OK' && status !== 'NG') throw new Error("Status tidak valid.");
 
@@ -872,5 +881,46 @@ function addQCRecord(qrCode, status) {
   } catch (e) {
     console.error(`Error in addQCRecord: ${e.message}`);
     return { success: false, message: `❌ Gagal: ${e.message}` };
+  }
+}
+
+/**
+ * Memproses scan untuk sheet Repair (IN dan OUT).
+ * @param {string} qrCode - QR Code yang di-scan.
+ * @returns {Object} - Objek berisi status keberhasilan dan pesan.
+ */
+function addRepairRecord(qrCode) {
+  try {
+    if (!qrCode) throw new Error("QR Code tidak boleh kosong.");
+    if (!isQRExistsInQC_(qrCode)) throw new Error(`QR "${qrCode}" tidak terdaftar di QC.`);
+
+    const sheet = SpreadsheetApp.getActive().getSheetByName(SHEET_REPAIR);
+    const lastRow = sheet.getLastRow();
+    const range = sheet.getRange(START_ROW, COL_REPAIR.QR, lastRow - START_ROW + 1, 1);
+    const data = range.getValues();
+
+    const { date, time } = now_();
+
+    // Loop untuk mencari apakah QR sudah ada
+    for (let i = 0; i < data.length; i++) {
+      if (data[i][0] === qrCode) {
+        // --- PROSES SCAN KEDUA (REPAIR OUT) ---
+        const targetRow = START_ROW + i;
+        // Cek apakah Date_2 sudah terisi
+        if (sheet.getRange(targetRow, COL_REPAIR.DATE_2).getValue()) {
+          throw new Error(`QR "${qrCode}" sudah selesai proses Repair Out.`);
+        }
+        sheet.getRange(targetRow, COL_REPAIR.DATE_2, 1, 2).setValues([[date, time]]);
+        return { success: true, message: "Repair Out" }; // Pesan khusus
+      }
+    }
+
+    // --- PROSES SCAN PERTAMA (REPAIR IN) ---
+    // Jika loop selesai dan QR tidak ditemukan, ini adalah scan pertama.
+    sheet.appendRow([qrCode, date, time, getEmail_()]);
+    return { success: true, message: "Repair In" }; // Pesan khusus
+
+  } catch (e) {
+    return { success: false, message: e.message };
   }
 }

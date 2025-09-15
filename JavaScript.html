@@ -1,22 +1,22 @@
 <script>
   // === State Management ===
-  let currentMode = null; // 'Production' atau 'QC'
+  let currentMode = null;
   let scannedQR = null;
   let html5QrCode = null;
-  let isProcessingScan = false; // Flag untuk mencegah multiple scan
+  let isProcessingScan = false;
 
   // === Element Selectors ===
   const views = document.querySelectorAll('.container');
-  const qcStatusView = document.getElementById('qc-status-view');
-  // --- PERUBAHAN: Tambahkan elemen baru ---
-  const productionDoneView = document.getElementById('production-done-view');
-  const productionDoneQrEl = document.getElementById('production-done-qr');
-  const scanAgainBtn = document.getElementById('scan-again-btn');
-  // (Sisa selector tidak berubah)
   const modeSelectionView = document.getElementById('mode-selection-view');
   const scanView = document.getElementById('scan-view');
+  const qcStatusView = document.getElementById('qc-status-view');
+  const productionDoneView = document.getElementById('production-done-view');
+  const repairDoneView = document.getElementById('repair-done-view'); // <-- Elemen Baru
+  
   const selectProductionBtn = document.getElementById('select-production-btn');
   const selectQcBtn = document.getElementById('select-qc-btn');
+  const selectRepairBtn = document.getElementById('select-repair-btn'); // <-- Elemen Baru
+  
   const scanTitle = document.getElementById('scan-title');
   const backToModeBtn = document.getElementById('back-to-mode-btn');
   const desktopScannerInput = document.getElementById('desktop-scanner-input');
@@ -25,8 +25,15 @@
   const ngBtn = document.getElementById('ng-btn');
   const cancelQcBtn = document.getElementById('cancel-qc-btn');
   const feedbackToast = document.getElementById('feedback-toast');
-
-  // (Fungsi showView, showToast, startScanner, stopScanner, processScan tidak berubah)
+  const productionDoneQrEl = document.getElementById('production-done-qr');
+  const scanAgainBtn = document.getElementById('scan-again-btn');
+  
+  const repairDoneTitleEl = document.getElementById('repair-done-title'); // <-- Elemen Baru
+  const repairDoneQrEl = document.getElementById('repair-done-qr'); // <-- Elemen Baru
+  const scanAgainRepairBtn = document.getElementById('scan-again-repair-btn'); // <-- Elemen Baru
+  
+  // === Functions ===
+  
   function showView(viewId) {
     views.forEach(view => view.classList.remove('active'));
     document.getElementById(viewId).classList.add('active');
@@ -35,149 +42,159 @@
   function showToast(message, type = 'success') {
     feedbackToast.textContent = message;
     feedbackToast.className = `toast show ${type}`;
-    setTimeout(() => {
-      feedbackToast.classList.remove('show');
-    }, 3000);
+    setTimeout(() => { feedbackToast.classList.remove('show'); }, 3000);
   }
 
   function startScanner() {
-      if (!html5QrCode) {
-          html5QrCode = new Html5Qrcode("qr-reader");
-      }
-      Html5Qrcode.getCameras().then(cameras => {
-          if (cameras && cameras.length) {
-              const cameraId = cameras.length > 1 ? cameras[1].id : cameras[0].id;
-              html5QrCode.start(
-                  cameraId, 
-                  { fps: 10, qrbox: { width: 250, height: 250 } },
-                  onScanSuccess,
-                  (errorMessage) => {}
-              ).catch((err) => {
-                  console.error("Gagal memulai kamera:", err);
-                  alert("Tidak dapat memulai kamera. Pastikan Anda memberikan izin akses kamera.");
-              });
-          }
-      }).catch(err => {
-          console.error("Error saat mengakses kamera:", err);
-      });
-      desktopScannerInput.focus();
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode("qr-reader");
+    }
+    
+    const qrboxSize = window.innerWidth < 600 ? 220 : 250;
+    const config = { fps: 10, qrbox: { width: qrboxSize, height: qrboxSize } };
+    
+    html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, (errorMessage) => {})
+    .catch((err) => {
+      console.error("Gagal memulai kamera:", err);
+      document.getElementById('qr-reader').innerHTML = "<p style='color: var(--error-color); padding: 1rem;'>Kamera Gagal. Mohon berikan izin akses & segarkan halaman.</p>";
+    });
+
+    desktopScannerInput.focus({ preventScroll: true });
   }
 
   function stopScanner() {
-      if (html5QrCode && html5QrCode.isScanning) {
-          html5QrCode.stop().catch(err => console.error("Gagal menghentikan scanner.", err));
-      }
+    if (html5QrCode && html5QrCode.isScanning) {
+      html5QrCode.stop().catch(err => console.error("Gagal menghentikan scanner.", err));
+    }
   }
 
   function processScan(qrCode) {
-      if (isProcessingScan) return;
-      isProcessingScan = true;
-      scannedQR = qrCode;
-      if (currentMode === 'Production') {
-          google.script.run
-              .withSuccessHandler(onBackendSuccess)
-              .withFailureHandler(onBackendFailure)
-              .addProductionRecord(scannedQR);
-      } else if (currentMode === 'QC') {
-          scannedQrCodeEl.textContent = scannedQR;
-          stopScanner();
-          showView('qc-status-view');
-          isProcessingScan = false;
-      }
+    if (isProcessingScan) return;
+    isProcessingScan = true;
+    scannedQR = qrCode;
+
+    if (currentMode === 'Production') {
+      google.script.run
+        .withSuccessHandler(onBackendSuccess)
+        .withFailureHandler(onBackendFailure)
+        .addProductionRecord(scannedQR);
+    } else if (currentMode === 'QC') {
+      scannedQrCodeEl.textContent = scannedQR;
+      stopScanner();
+      showView('qc-status-view');
+      isProcessingScan = false;
+    } else if (currentMode === 'Repair') { // <-- Logika Baru
+      google.script.run
+        .withSuccessHandler(onBackendSuccess)
+        .withFailureHandler(onBackendFailure)
+        .addRepairRecord(scannedQR);
+    }
   }
 
   // === Event Handlers ===
   function onScanSuccess(decodedText, decodedResult) {
-      if (navigator.vibrate) navigator.vibrate(50);
-      processScan(decodedText);
+    if (isProcessingScan) return;
+    if (navigator.vibrate) navigator.vibrate(50);
+    processScan(decodedText);
   }
   
-  // --- PERUBAHAN UTAMA: Logika setelah backend merespons ---
   function onBackendSuccess(response) {
-      if (response.success) {
-          if (currentMode === 'Production') {
-              // Jika sukses di mode Produksi, ganti layar
-              stopScanner();
-              productionDoneQrEl.textContent = scannedQR;
-              showView('production-done-view');
-          } else {
-              // Untuk mode lain (seperti QC), tetap tampilkan toast
-              showToast(response.message, 'success');
-          }
+    if (response.success) {
+      stopScanner();
+      if (currentMode === 'Production') {
+        productionDoneQrEl.textContent = scannedQR;
+        showView('production-done-view');
+      } else if (currentMode === 'Repair') { // <-- Logika Baru
+        // Menggunakan pesan dari backend ("Repair In" / "Repair Out") sebagai judul
+        repairDoneTitleEl.textContent = `${response.message} ✅`; 
+        repairDoneQrEl.textContent = scannedQR;
+        showView('repair-done-view');
       } else {
-          // Jika gagal, selalu tampilkan toast error dan reset
-          showToast(response.message, 'error');
-          setTimeout(() => {
-              isProcessingScan = false;
-              desktopScannerInput.value = '';
-              desktopScannerInput.focus();
-          }, 1500);
+        showToast(response.message, 'success');
       }
+    } else {
+      showToast(response.message, 'error');
+      setTimeout(() => {
+        isProcessingScan = false;
+        desktopScannerInput.value = '';
+        desktopScannerInput.focus();
+      }, 1500);
+    }
   }
 
   function onBackendFailure(error) {
-      showToast(error.message, 'error');
-      setTimeout(() => {
-          isProcessingScan = false;
-          desktopScannerInput.value = '';
-          desktopScannerInput.focus();
-      }, 1500);
+    showToast(error.message, 'error');
+    setTimeout(() => {
+      isProcessingScan = false;
+      desktopScannerInput.value = '';
+      desktopScannerInput.focus();
+    }, 1500);
   }
   
   // === Event Listeners ===
-  // (selectProductionBtn, selectQcBtn, backToModeBtn, cancelQcBtn, okBtn, ngBtn tidak berubah)
   selectProductionBtn.addEventListener('click', () => {
     currentMode = 'Production';
     scanTitle.textContent = 'Scan QR Produksi';
     showView('scan-view');
     startScanner();
   });
+
   selectQcBtn.addEventListener('click', () => {
     currentMode = 'QC';
     scanTitle.textContent = 'Scan QR untuk QC';
     showView('scan-view');
     startScanner();
   });
+  
+  selectRepairBtn.addEventListener('click', () => { // <-- Listener Baru
+    currentMode = 'Repair';
+    scanTitle.textContent = 'Scan QR untuk Repair';
+    showView('scan-view');
+    startScanner();
+  });
+
   backToModeBtn.addEventListener('click', () => {
     stopScanner();
     showView('mode-selection-view');
   });
+  
   cancelQcBtn.addEventListener('click', () => {
-      showView('scan-view');
-      startScanner();
-  });
-  okBtn.addEventListener('click', () => {
-      okBtn.disabled = true; ngBtn.disabled = true; okBtn.textContent = "Menyimpan...";
-      google.script.run
-          .withSuccessHandler(response => { onBackendSuccess(response); showView('scan-view'); startScanner(); okBtn.disabled = false; ngBtn.disabled = false; okBtn.textContent = "OK"; })
-          .withFailureHandler(error => { onBackendFailure(error); okBtn.disabled = false; ngBtn.disabled = false; okBtn.textContent = "OK"; })
-          .addQCRecord(scannedQR, 'OK');
-  });
-  ngBtn.addEventListener('click', () => {
-      okBtn.disabled = true; ngBtn.disabled = true; ngBtn.textContent = "Menyimpan...";
-      google.script.run
-          .withSuccessHandler(response => { onBackendSuccess(response); showView('scan-view'); startScanner(); okBtn.disabled = false; ngBtn.disabled = false; ngBtn.textContent = "NG"; })
-          .withFailureHandler(error => { onBackendFailure(error); okBtn.disabled = false; ngBtn.disabled = false; ngBtn.textContent = "NG"; })
-          .addQCRecord(scannedQR, 'NG');
+    showView('scan-view');
+    startScanner();
   });
 
-  // --- PERUBAHAN: Tambahkan event listener untuk tombol "Scan Lagi" ---
-  scanAgainBtn.addEventListener('click', () => {
-      isProcessingScan = false; // Reset flag
-      desktopScannerInput.value = '';
-      showView('scan-view');
-      startScanner();
+  okBtn.addEventListener('click', () => {
+    okBtn.disabled = true; ngBtn.disabled = true; okBtn.textContent = "Menyimpan...";
+    google.script.run
+      .withSuccessHandler(response => { onBackendSuccess(response); showView('scan-view'); startScanner(); okBtn.disabled = false; ngBtn.disabled = false; okBtn.textContent = "OK"; })
+      .withFailureHandler(error => { onBackendFailure(error); okBtn.disabled = false; ngBtn.disabled = false; okBtn.textContent = "OK"; })
+      .addQCRecord(scannedQR, 'OK');
+  });
+
+  ngBtn.addEventListener('click', () => {
+    okBtn.disabled = true; ngBtn.disabled = true; ngBtn.textContent = "Menyimpan...";
+    google.script.run
+      .withSuccessHandler(response => { onBackendSuccess(response); showView('scan-view'); startScanner(); okBtn.disabled = false; ngBtn.disabled = false; ngBtn.textContent = "NG"; })
+      .withFailureHandler(error => { onBackendFailure(error); okBtn.disabled = false; ngBtn.disabled = false; ngBtn.textContent = "NG"; })
+      .addQCRecord(scannedQR, 'NG');
   });
   
-  // (handler desktop scanner & body click tidak berubah)
+  function resetAndScan() {
+    isProcessingScan = false;
+    desktopScannerInput.value = '';
+    showView('scan-view');
+    startScanner();
+  }
+
+  scanAgainBtn.addEventListener('click', resetAndScan);
+  scanAgainRepairBtn.addEventListener('click', resetAndScan); // <-- Listener Baru
+  
   desktopScannerInput.addEventListener('change', (event) => {
-      const qrCode = event.target.value.trim();
-      if (qrCode) { processScan(qrCode); }
-  });
-  document.body.addEventListener('click', () => {
-      if(scanView.classList.contains('active')) { desktopScannerInput.focus(); }
+    const qrCode = event.target.value.trim();
+    if (qrCode) { processScan(qrCode); }
   });
 
-  // Inisialisasi
+  // Inisialisasi Aplikasi
   showView('mode-selection-view');
 </script>
+
